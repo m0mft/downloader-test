@@ -1,37 +1,25 @@
-# Download File Workflow
-
 name: Download File
 
+permissions:
+  contents: read
+
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
 
 jobs:
-  download:
+  downloader:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-      - name: Set up Python
-        uses: actions/setup-python@v2
+      - name: Download the file
+        run: |
+          wget "https://packages.openvpn.net/connect/v3/openvpn-connect-3.8.1.5790_signed.dmg" -O downloaded.bin
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
         with:
-          python-version: '3.x'
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install requests
-
-      - name: Download file
-        run: |
-          python -c 'import requests; response = requests.get("https://packages.openvpn.net/connect/v3/openvpn-connect-3.8.1.5790_signed.dmg"); open("downloaded_file", "wb").write(response.content)'
-
-      - name: Push downloaded file
-        run: |
-          git config user.name "GitHub Actions"
-          git config user.email "action@github.com"
-          git add downloaded_file
-          git commit -m "Add downloaded file"
-          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+          name: openvpn-connect
+          path: downloaded.bin
