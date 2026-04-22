@@ -1,24 +1,37 @@
+# Download File Workflow
+
 name: Download File
 
 on:
-  workflow_dispatch:   # Run manually, whenever you want
+  push:
+    branches:
+      - main
 
 jobs:
-  downloader:
+  download:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v2
 
-      - name: Download the file
-        run: |
-          wget "https://packages.openvpn.net/connect/v3/openvpn-connect-3.8.1.5790_signed.dmg" -O downloaded.bin
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.x'
 
-      - name: Commit file back to repo
+      - name: Install dependencies
         run: |
-          git config user.name "github-actions"
-          git config user.email "actions@github.com"
-          git add downloaded.bin
-          git commit -m "Downloaded file"
-          git push
+          python -m pip install --upgrade pip
+          pip install requests
+
+      - name: Download file
+        run: |
+          python -c 'import requests; response = requests.get("https://packages.openvpn.net/connect/v3/openvpn-connect-3.8.1.5790_signed.dmg"); open("downloaded_file", "wb").write(response.content)'
+
+      - name: Push downloaded file
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "action@github.com"
+          git add downloaded_file
+          git commit -m "Add downloaded file"
+          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
