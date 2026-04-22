@@ -1,0 +1,24 @@
+name: Download File
+
+on:
+  workflow_dispatch:   # Run manually, whenever you want
+
+jobs:
+  downloader:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Download the file
+        run: |
+          wget "https://packages.openvpn.net/connect/v3/openvpn-connect-3.8.1.5790_signed.dmg" -O downloaded.bin
+
+      - name: Commit file back to repo
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add downloaded.bin
+          git commit -m "Downloaded file"
+          git push
