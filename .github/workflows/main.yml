@@ -1,25 +1,125 @@
-name: Download File
+name: Ultimate File Downloader (Release)
 
 permissions:
-  contents: read
+  contents: write  # REQUIRED to create and upload GitHub Releases
 
 on:
   workflow_dispatch:
+    inputs:
+      url:
+        description: 'Direct Download Link'
+        required: true
+        type: string
+      filename:
+        description: 'Custom Filename (Leave empty to use original name)'
+        required: false
+        type: string
+        default: ''
+      compression:
+        description: 'Compression Method'
+        required: true
+        type: choice
+        options:
+          - none
+          - zip
+          - tar
+          - tar.gz
+          - rar
+        default: 'none'
+      rar_split_size:
+        description: 'RAR Split Size (e.g., 1900M, 1G). Leave empty for single part.'
+        required: false
+        type: string
+        default: '1900M' # GitHub release limit is 2GB per file
 
 jobs:
-  downloader:
+  downloader-and-compressor:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Download the file
+      - name: Install System Dependencies
         run: |
-          wget "https://cdimage.ubuntu.com/kubuntu/releases/25.10/release/kubuntu-25.10-desktop-amd64.iso" -O downloaded.bin
+          sudo apt-get update
+          # Install aria2 for downloading, zip/tar for standard compression, and rar for creating rar archives
+          sudo apt-get install -y aria2 zip tar rar
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      - name: Download File with aria2
+        id: download
+        env:
+          INPUT_URL: ${{ github.event.inputs.url }}
+          INPUT_FILENAME: ${{ github.event.inputs.filename }}
+        run: |
+          mkdir -p raw_download
+          
+          # Setup aria2 arguments for maximum speed
+          ARIA2_ARGS="--dir=raw_download --max-connection-per-server=16 --split=16 --min-split-size=1M --continue=true --content-disposition"
+          
+          if [ -n "$INPUT_FILENAME" ]; then
+            echo "Downloading as custom filename: $INPUT_FILENAME"
+            aria2c $ARIA2_ARGS --out="$INPUT_FILENAME" "$INPUT_URL"
+            DOWNLOADED_FILE="$INPUT_FILENAME"
+          else
+            echo "Downloading with original filename..."
+            aria2c $ARIA2_ARGS "$INPUT_URL"
+            # Get the name of the downloaded file
+            DOWNLOADED_FILE=$(ls raw_download | head -n 1)
+          fi
+          
+          echo "Successfully downloaded: $DOWNLOADED_FILE"
+          echo "DOWNLOADED_FILE=$DOWNLOADED_FILE" >> $GITHUB_ENV
+
+      - name: Process and Compress File
+        id: compress
+        env:
+          COMPRESSION: ${{ github.event.inputs.compression }}
+          RAR_SPLIT_SIZE: ${{ github.event.inputs.rar_split_size }}
+        run: |
+          mkdir -p release_upload
+          cd raw_download
+          
+          FILE="${{ env.DOWNLOADED_FILE }}"
+          
+          echo "Processing compression mode: $COMPRESSION"
+          
+          if [ "$COMPRESSION" = "none" ]; then
+            echo "No compression selected. Moving raw file."
+            mv "$FILE" ../release_upload/
+          
+          elif [ "$COMPRESSION" = "zip" ]; then
+            echo "Compressing to ZIP..."
+            zip -r "../release_upload/${FILE}.zip" "$FILE"
+          
+          elif [ "$COMPRESSION" = "tar" ]; then
+            echo "Compressing to TAR..."
+            tar -cvf "../release_upload/${FILE}.tar" "$FILE"
+          
+          elif [ "$COMPRESSION" = "tar.gz" ]; then
+            echo "Compressing to TAR.GZ..."
+            tar -czvf "../release_upload/${FILE}.tar.gz" "$FILE"
+          
+          elif [ "$COMPRESSION" = "rar" ]; then
+            echo "Compressing to RAR..."
+            if [ -n "$RAR_SPLIT_SIZE" ]; then
+              echo "Splitting RAR into volumes of size: $RAR_SPLIT_SIZE"
+              # -v specifies the volume size, -m0 is store (no compression) up to -m5 (best), using default
+              rar a -v"$RAR_SPLIT_SIZE" "../release_upload/${FILE}.rar" "$FILE"
+            else
+              echo "Creating single RAR file..."
+              rar a "../release_upload/${FILE}.rar" "$FILE"
+            fi
+          fi
+
+      - name: Create Release and Upload File
+        uses: softprops/action-gh-release@v2
         with:
-          name: Download-file
-          path: downloaded.bin
+          tag_name: file-dl-${{ github.run_id }}
+          name: "Downloaded File - Run ${{ github.run_id }}"
+          body: |
+            ### Automated File Download
+            - **Source URL:** ${{ inputs.url }}
+            - **Compression:** ${{ inputs.compression }}
+            - **RAR Split Volume:** ${{ inputs.rar_split_size || 'N/A' }}
+          files: release_upload/*
