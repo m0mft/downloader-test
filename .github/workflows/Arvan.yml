@@ -152,10 +152,16 @@ jobs:
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.ARVANCLOUD_ACCESS_KEY }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.ARVANCLOUD_SECRET_KEY }}
-          AWS_DEFAULT_REGION: us-east-1 # Required by AWS CLI, acts as a dummy value here
+          AWS_DEFAULT_REGION: us-east-1 
           ENDPOINT_URL: ${{ github.event.inputs.arvancloud_endpoint }}
           BUCKET_NAME: ${{ github.event.inputs.arvancloud_bucket }}
         run: |
+          # Fix S3-compatible multipart and signature errors
+          aws configure set default.s3.signature_version s3v4
+          aws configure set default.s3.addressing_style path
+          aws configure set default.s3.multipart_threshold 512MB
+          aws configure set default.s3.multipart_chunksize 512MB
+          
           aws s3 cp release_upload/ s3://$BUCKET_NAME/downloads/run-${{ github.run_id }}/ \
             --recursive \
             --endpoint-url $ENDPOINT_URL
