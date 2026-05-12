@@ -1,4 +1,4 @@
-name: Arvan File Downloader
+name: Arvan File Downloader (Release)
 
 permissions:
   contents: write  # REQUIRED to create and upload GitHub Releases
@@ -39,6 +39,20 @@ on:
           - github-release
           - arvancloud-s3
         default: 'github-release'
+      arvancloud_endpoint:
+        description: 'ArvanCloud Endpoint URL (Only used if target is ArvanCloud)'
+        required: false
+        type: choice
+        options:
+          - https://s3.ir-thr-at1.arvanstorage.ir
+          - https://hot.ir-central1.arvanstorage.ir
+          - https://s3.ir-tbz-sh1.arvanstorage.ir
+        default: 'https://s3.ir-thr-at1.arvanstorage.ir'
+      arvancloud_bucket:
+        description: 'ArvanCloud Bucket Name (e.g., siminm0mft, tabriz-m0mft)'
+        required: false
+        type: string
+        default: 'siminm0mft'
 
 jobs:
   downloader-and-compressor:
@@ -144,8 +158,8 @@ jobs:
       - name: Upload to ArvanCloud S3
         if: ${{ github.event.inputs.upload_target == 'arvancloud-s3' }}
         env:
-          ENDPOINT_URL: ${{ secrets.ARVANCLOUD_ENDPOINT }} # e.g., https://s3.ir-thr-at1.arvanstorage.ir
-          BUCKET_NAME: ${{ secrets.ARVANCLOUD_BUCKET }}
+          ENDPOINT_URL: ${{ github.event.inputs.arvancloud_endpoint }}
+          BUCKET_NAME: ${{ github.event.inputs.arvancloud_bucket }}
         run: |
           aws s3 cp release_upload/ s3://$BUCKET_NAME/downloads/run-${{ github.run_id }}/ \
             --recursive \
